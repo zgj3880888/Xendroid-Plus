@@ -67,6 +67,8 @@ ContentPackage::ContentPackage(KernelState* kernel_state,
 }
 
 ContentPackage::~ContentPackage() {
+  XELOGI("~ContentPackage: device_path={} (unregister attempt)",
+         device_path_);
   auto fs = kernel_state_->file_system();
   fs->UnregisterSymbolicLink(root_name_ + ":");
   fs->UnregisterDevice(device_path_);
@@ -599,6 +601,7 @@ bool ContentManager::UnpackPackageFile(
 }
 
 X_RESULT ContentManager::CloseContent(const std::string_view root_name) {
+  XELOGI("CloseContent: root_name={} (close attempt)", root_name);
   auto global_lock = global_critical_region_.Acquire();
 
   // 415607D6 - Uses XamContentCreate with name "save", but XamContentClose with

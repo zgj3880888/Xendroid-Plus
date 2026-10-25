@@ -31,6 +31,7 @@
 #include "xenia/vfs/devices/stfs_xbox.h"
 #include "xenia/vfs/devices/xcontent_container_device.h"
 #include "xenia/vfs/iso_metadata.h"
+#include "xenia/vfs/virtual_file_system.h"
 #include "xenia/vfs/zar_metadata.h"
 #include "xenia/xbox.h"
 
@@ -701,6 +702,16 @@ typedef struct {
 } X_SWAPDISC_ERROR_MESSAGE;
 static_assert_size(X_SWAPDISC_ERROR_MESSAGE, 12);
 
+// Disc swap is the only guest-initiated path allowed to unmount the title's
+// own (unregister-locked) device; unlock it right before the unmount.
+static void UnlockAndUnregisterDisc(xe::vfs::VirtualFileSystem* filesystem,
+                                    const std::string_view mount_path) {
+  if (auto* device = filesystem->GetDevice(mount_path)) {
+    device->set_unregister_locked(false);
+  }
+  filesystem->UnregisterDevice(mount_path);
+}
+
 dword_result_t XamSwapDisc_entry(
     dword_t disc_number, pointer_t<X_KEVENT> completion_handle,
     pointer_t<X_SWAPDISC_ERROR_MESSAGE> error_message) {
@@ -750,7 +761,7 @@ dword_result_t XamSwapDisc_entry(
 
   // Unmount the current disc
   if (filesystem->ResolvePath(mount_path) != NULL) {
-    filesystem->UnregisterDevice(mount_path);
+    UnlockAndUnregisterDisc(filesystem, mount_path);
   }
 
   std::u16string text_message = xe::load_and_swap<std::u16string>(
@@ -796,7 +807,7 @@ dword_result_t XamSwapDisc_entry(
     auto* device = filesystem->GetDevice(mount_path);
     if (!device) {
       XELOGE("XamSwapDisc: Failed to get mounted device");
-      filesystem->UnregisterDevice(mount_path);
+      UnlockAndUnregisterDisc(filesystem, mount_path);
       error_dialog_message =
           "ERROR: Failed to access the mounted disc.\n"
           "Please try again with a different file.";
@@ -817,7 +828,7 @@ dword_result_t XamSwapDisc_entry(
               "XamSwapDisc: Disc number mismatch! Requested disc {}, but "
               "mounted disc is disc {}.",
               uint32_t(disc_number), uint8_t(exec_info.disc_number));
-          filesystem->UnregisterDevice(mount_path);
+          UnlockAndUnregisterDisc(filesystem, mount_path);
           error_dialog_message = fmt::format(
               "ERROR: Wrong Disc!\n\n"
               "Requested: Disc {}\n"
@@ -833,7 +844,7 @@ dword_result_t XamSwapDisc_entry(
               "XamSwapDisc: Title ID mismatch! Expected {:08X}, but mounted "
               "disc has {:08X}.",
               uint32_t(info->title_id), uint32_t(exec_info.title_id));
-          filesystem->UnregisterDevice(mount_path);
+          UnlockAndUnregisterDisc(filesystem, mount_path);
           error_dialog_message = fmt::format(
               "ERROR: Wrong Game!\n\n"
               "This disc does not belong to the current game.\n\n"
@@ -895,7 +906,7 @@ dword_result_t XamSwapDisc_entry(
         if (image_meta->title_id != info->title_id) {
           XELOGE("XamSwapDisc: disc belongs to title {:08X}, expected {:08X}",
                  image_meta->title_id, uint32_t(info->title_id));
-          filesystem->UnregisterDevice(mount_path);
+          UnlockAndUnregisterDisc(filesystem, mount_path);
           error_dialog_message =
               "ERROR: That disc belongs to a different game.\n"
               "Please select a disc for this title.";
@@ -905,7 +916,7 @@ dword_result_t XamSwapDisc_entry(
             image_meta->disc_number != disc_number) {
           XELOGE("XamSwapDisc: disc {} selected, {} requested",
                  uint32_t(image_meta->disc_number), uint32_t(disc_number));
-          filesystem->UnregisterDevice(mount_path);
+          UnlockAndUnregisterDisc(filesystem, mount_path);
           error_dialog_message =
               "ERROR: That is the wrong disc.\n"
               "Please select the requested disc.";

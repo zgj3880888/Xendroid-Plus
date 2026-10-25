@@ -2230,6 +2230,41 @@ bool Emulator::ExceptionCallback(Exception* ex) {
         fmt::format("Faulting instruction: 0x{:08X}\n", instr_word));
   }
 
+  // Dump the guest code around the crash PC, with `bl` targets resolved. The
+  // word right before the return address (LR-4) is usually the call whose
+  // result the crashing sequence consumed, so make it and its target stand
+  // out in the log.
+  if (guest_function) {
+    crash_msg.append("Code around PC:\n");
+    const uint32_t code_from =
+        guest_pc > module_base + 24 * 4 ? guest_pc - 24 * 4 : module_base;
+    const uint32_t code_to = guest_pc + 8 * 4;
+    for (uint32_t addr = code_from; addr <= code_to && addr >= code_from;
+         addr += 4) {
+      uint32_t w = 0;
+      if (!guest_read32(addr, &w)) {
+        continue;
+      }
+      std::string note;
+      if (addr == guest_pc) {
+        note = "   <== PC";
+      } else if (guest_lr && addr == guest_lr - 4) {
+        note = "   <== call site (LR-4)";
+      }
+      if ((w >> 26) == 18 && (w & 1)) {
+        // bl: LK=1. LI is the signed 24-bit field in bits 6-29, in instruction
+        // words; the target is relative to the address of this instruction.
+        uint32_t li = (w >> 2) & 0x00FFFFFF;
+        if (li & 0x00800000) {
+          li |= 0xFF000000;
+        }
+        const uint32_t target = addr + (li << 2);
+        note += fmt::format("   bl 0x{:08X} {}", target, mod_off(target));
+      }
+      crash_msg.append(fmt::format("  {:08X}: {:08X}{}\n", addr, w, note));
+    }
+  }
+
   // Varied guest prologues make a fixed back-chain walk unreliable; scan the
   // stack for words pointing just past a `bl` in the module's code range.
   crash_msg.append("Guest backtrace:\n");

@@ -28,6 +28,12 @@ class Device {
   virtual bool Initialize() = 0;
 
   const std::string& mount_path() const { return mount_path_; }
+  // The title's own device (game disc/zar) must never be unmounted by
+  // guest-initiated content/profile APIs; only explicit disc-swap paths may
+  // unlock it first (Ninja Gaiden 2 tears down its volume at the title screen
+  // and then crashes on a NULL volume node).
+  void set_unregister_locked(bool value) { unregister_locked_ = value; }
+  bool unregister_locked() const { return unregister_locked_; }
   virtual bool is_read_only() const { return true; }
 
   virtual void Dump(StringBuffer* string_buffer) = 0;
@@ -45,6 +51,7 @@ class Device {
  protected:
   xe::global_critical_region global_critical_region_;
   std::string mount_path_;
+  bool unregister_locked_ = false;
 };
 
 }  // namespace vfs

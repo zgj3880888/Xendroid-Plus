@@ -807,6 +807,21 @@ void IoDeleteDevice_entry(dword_t device_ptr, const ppc_context_t& ctx) {
 
 DECLARE_XBOXKRNL_EXPORT1(IoDeleteDevice, kFileSystem, kStub);
 
+// Ninja Gaiden 2 (544307D5) opens \Device\Harddisk0 during its title-screen
+// volume check and calls this on the resulting handle. The console kernel
+// refuses to dismount a volume through such a handle. An unimplemented stub
+// here fell through to the "undefined extern" path, which returns 0
+// (X_STATUS_SUCCESS): the game then believed the volume had been dismounted,
+// proceeded on that false premise, and crashed dereferencing a null volume
+// object shortly after re-resolving GAME:\. Refusing the request, like the
+// console does, keeps the game on its regular error-handling path.
+dword_result_t IoDismountVolumeByFileHandle_entry(dword_t file_handle) {
+  XELOGD("IoDismountVolumeByFileHandle({:08X})",
+         static_cast<uint32_t>(file_handle));
+  return X_STATUS_INVALID_PARAMETER;
+}
+DECLARE_XBOXKRNL_EXPORT1(IoDismountVolumeByFileHandle, kFileSystem, kStub);
+
 }  // namespace xboxkrnl
 }  // namespace kernel
 }  // namespace xe

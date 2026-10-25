@@ -110,6 +110,7 @@ DECLARE_XAM_EXPORT1(XamProfileCreate, kNone, kSketchy);
 
 dword_result_t XamProfileClose_entry(lpstring_t mount_name) {
   std::string guest_name = mount_name.value();
+  XELOGI("XamProfileClose: mount_name={}", guest_name);
   const bool result =
       kernel_state()->file_system()->UnregisterDevice(guest_name + ':');
 

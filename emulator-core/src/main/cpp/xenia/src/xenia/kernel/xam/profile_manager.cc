@@ -330,6 +330,7 @@ bool ProfileManager::MountProfile(const uint64_t xuid, std::string mount_path) {
 }
 
 bool ProfileManager::DismountProfile(const uint64_t xuid) {
+  XELOGI("DismountProfile: xuid={:016X}", xuid);
   return kernel_state_->file_system()->UnregisterDevice(
       fmt::format(kDefaultMountFormat, xuid) + ':');
 }

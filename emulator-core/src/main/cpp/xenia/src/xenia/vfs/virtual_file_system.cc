@@ -51,6 +51,12 @@ bool VirtualFileSystem::UnregisterDevice(const std::string_view path) {
   ReleaseRetiredDevices();
   for (auto it = devices_.begin(); it != devices_.end(); ++it) {
     if ((*it)->mount_path() == path) {
+      if ((*it)->unregister_locked()) {
+        XELOGE(
+            "UnregisterDevice({}) BLOCKED: this is the title's own device and "
+            "must stay mounted (guest-initiated unmount)", path);
+        return false;
+      }
       XELOGD("Unregistered device: {}", (*it)->mount_path());
       // A handle the title still holds points at the device's entries, and
       // closing it releases its entry (HostPathFile), so such a device stays
